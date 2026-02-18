@@ -29,6 +29,11 @@ export default function NightFuryRadar() {
       pauseSelection: 0, // 0 = Resume, 1 = Restart, 2 = Main Menu
     };
 
+    /* ─── Delta Time (frame-rate independence) ─── */
+    const TARGET_FPS = 60;
+    const TARGET_FRAME_TIME = 1000 / TARGET_FPS; // ~16.67ms
+    let lastTime = performance.now();
+
 
 
     /* ─── Player ─── */
@@ -355,37 +360,39 @@ export default function NightFuryRadar() {
     }
 
     /* ─── Update ─── */
-    function update() {
+    function update(dt) {
       if (STATE.mode === "PLAY") {
         const up = keys["ArrowUp"] || keys["KeyW"];
         const dn = keys["ArrowDown"] || keys["KeyS"];
         const rt = keys["ArrowRight"] || keys["KeyD"];
         const lt = keys["ArrowLeft"] || keys["KeyA"];
 
-        if (up) player.vy += player.lift;
-        if (dn) player.vy -= player.lift * 0.7;
-        if (rt) player.vx += 0.22;
-        if (lt) player.vx -= 0.14;
+        // Apply dt to velocity changes for frame-rate independence
+        if (up) player.vy += player.lift * dt;
+        if (dn) player.vy -= player.lift * 0.7 * dt;
+        if (rt) player.vx += 0.22 * dt;
+        if (lt) player.vx -= 0.14 * dt;
 
-        player.vy += player.gravity;
-        player.vy *= player.drag;
-        player.vx *= player.dragX;
-        player.y += player.vy;
-        player.x += player.vx;
+        player.vy += player.gravity * dt;
+        // Use Math.pow for exponential decay with dt
+        player.vy *= Math.pow(player.drag, dt);
+        player.vx *= Math.pow(player.dragX, dt);
+        player.y += player.vy * dt;
+        player.x += player.vx * dt;
         player.x = Math.max(40, Math.min(W * 0.65, player.x));
 
         const speedF = 1 + (player.x / W) * 3.5; // HARDER: Faster scaler
-        scrollX += player.baseSpeed * speedF;
+        scrollX += player.baseSpeed * speedF * dt;
         STATE.score = Math.floor(scrollX / 10);
 
-        // Recharge
+        // Recharge (scaled by dt)
         const rr = speedF > 2 ? pulse.rechargeFast : pulse.rechargeBase;
-        pulse.energy = Math.min(pulse.max, pulse.energy + rr);
+        pulse.energy = Math.min(pulse.max, pulse.energy + rr * dt);
 
-        // Update pulses
+        // Update pulses (scaled by dt)
         for (let i = pulses.length - 1; i >= 0; i--) {
           const p = pulses[i];
-          p.r += p.isFireball ? 14 : 12;  // Faster expansion
+          p.r += (p.isFireball ? 14 : 12) * dt;  // Faster expansion
           p.a = 1 - p.r / p.maxR;
           if (p.r >= p.maxR) { pulses.splice(i, 1); continue; }
           for (const ob of obstacles) {
@@ -404,9 +411,9 @@ export default function NightFuryRadar() {
           }
         }
 
-        // Update powerup timers
+        // Update powerup timers (scaled by dt)
         if (activePowerups.immunity.active) {
-          activePowerups.immunity.timer--;
+          activePowerups.immunity.timer -= dt;
           if (activePowerups.immunity.timer <= 0) {
             activePowerups.immunity.active = false;
           }
@@ -433,13 +440,13 @@ export default function NightFuryRadar() {
           }
         }
 
-        // Obstacle fade
+        // Obstacle fade (scaled by dt)
         for (const ob of obstacles) {
           if (ob.revealT > 0) {
-            ob.revealT--;
+            ob.revealT -= dt;
             ob.opacity = ob.revealT / 100;
           } else {
-            ob.opacity = Math.max(0, ob.opacity - 0.004);
+            ob.opacity = Math.max(0, ob.opacity - 0.004 * dt);
           }
         }
 
@@ -501,14 +508,14 @@ export default function NightFuryRadar() {
           nextPowerup += 600 + Math.random() * 400;
         }
 
-        // Update powerups
+        // Update powerups (scaled by dt)
         powerups.forEach(pu => {
-          pu.pulse += 0.08;
+          pu.pulse += 0.08 * dt;
         });
         powerups.splice(0, powerups.filter(pu => pu.x - scrollX < -100).length);
 
-        // Trail particles
-        if (Math.random() > 0.3) {
+        // Trail particles (spawn rate adjusted, but not dt-dependent as it's probability-based)
+        if (Math.random() > Math.pow(0.3, dt)) {
           particles.push({
             x: player.x + 4,
             y: player.y + player.height / 2 + (Math.random() - 0.5) * 8,
@@ -520,8 +527,8 @@ export default function NightFuryRadar() {
         if (particles.length > 80) particles.splice(0, particles.length - 80);
         for (let i = particles.length - 1; i >= 0; i--) {
           const p = particles[i];
-          p.x += p.vx; p.y += p.vy;
-          p.a -= 0.01; p.s *= 0.997;
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          p.a -= 0.01 * dt; p.s *= Math.pow(0.997, dt);
           if (p.a <= 0) particles.splice(i, 1);
         }
 
@@ -529,22 +536,22 @@ export default function NightFuryRadar() {
       }
 
       if (STATE.mode === "CRASH") {
-        STATE.crashTimer--;
+        STATE.crashTimer -= dt;
         // Reveal walls on crash
         for (const ob of obstacles) {
-          ob.opacity = Math.min(1, ob.opacity + 0.025);
+          ob.opacity = Math.min(1, ob.opacity + 0.025 * dt);
         }
       }
 
-      // Sonar bar decay
-      sonar.energy *= 0.94;
+      // Sonar bar decay (exponential decay with dt)
+      sonar.energy *= Math.pow(0.94, dt);
       for (let i = 0; i < sonar.bars.length; i++) {
-        sonar.bars[i] = sonar.bars[i] * 0.87 +
+        sonar.bars[i] = sonar.bars[i] * Math.pow(0.87, dt) +
           sonar.energy * Math.sin(i * 0.5 + Date.now() * 0.005) *
-          (0.3 + Math.random() * 0.6) * 0.1;
+          (0.3 + Math.random() * 0.6) * 0.1 * dt;
       }
 
-      shake.i *= shake.decay;
+      shake.i *= Math.pow(shake.decay, dt);
       if (shake.i < 0.2) shake.i = 0;
     }
 
@@ -1006,12 +1013,19 @@ export default function NightFuryRadar() {
     }
 
     /* ─── Loop ─── */
-    function loop() {
-      update();
+    function loop(currentTime) {
+      // Calculate delta time (dt = 1.0 at 60fps)
+      const elapsed = currentTime - lastTime;
+      lastTime = currentTime;
+      // Clamp dt to prevent huge jumps (e.g., after tab switch)
+      const dt = Math.min(elapsed / TARGET_FRAME_TIME, 3);
+
+      update(dt);
       draw();
       animFrameRef.current = requestAnimationFrame(loop);
     }
-    loop();
+    // Start the loop with initial timestamp
+    animFrameRef.current = requestAnimationFrame(loop);
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
