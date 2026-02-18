@@ -11,5 +11,8 @@ html, body {
   background: #05051a;
   font-family: 'Courier New', monospace;
   -webkit-font-smoothing: antialiased;
-  cursor: none;
+}
+
+canvas {
+  cursor: auto;
 }

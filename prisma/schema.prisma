@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User model for authentication
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  scores       Score[]
+  hostedParties Party[]  @relation("PartyHost")
+  partyMember  PartyMember[]
+
+  @@index([username])
+}
+
+// Score model for leaderboard
+model Score {
+  id        String   @id @default(cuid())
+  userId    String?
+  guestName String?  // For non-logged in players
+  score     Int
+  gameMode  String   @default("classic")
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([score(sort: Desc)])
+  @@index([gameMode])
+}
+
+// Party model for playing with friends
+model Party {
+  id        String   @id @default(cuid())
+  code      String   @unique // 6-character party code
+  hostId    String
+  status    String   @default("waiting") // waiting, playing, finished
+  gameMode  String   @default("classic")
+  maxPlayers Int     @default(10)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  host      User     @relation("PartyHost", fields: [hostId], references: [id], onDelete: Cascade)
+  members   PartyMember[]
+
+  @@index([code])
+  @@index([status])
+}
+
+// Party membership
+model PartyMember {
+  id        String   @id @default(cuid())
+  partyId   String
+  userId    String?
+  guestName String?  // For non-logged in players
+  isReady   Boolean  @default(false)
+  score     Int      @default(0)
+  joinedAt  DateTime @default(now())
+
+  party     Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([partyId, userId])
+  @@index([partyId])
+}

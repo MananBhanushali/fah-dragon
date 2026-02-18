@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import UserMenu from "./UserMenu";
 
 export default function NightFuryRadar() {
   const canvasRef = useRef(null);
@@ -753,8 +754,8 @@ export default function NightFuryRadar() {
         ctx.fillText(`BEST: ${STATE.highScore}`, 18, 50);
       }
 
-      // Plasma bar
-      const bw = 140, bh = 8, bx = W - bw - 20, by = 26;
+      // Plasma bar (center top to avoid overlapping right-side UI)
+      const bw = 200, bh = 8, bx = (W - bw) / 2, by = 26;
       ctx.fillStyle = "#12081e";
       ctx.fillRect(bx, by, bw, bh);
       const fill = pulse.energy / pulse.max;
@@ -765,8 +766,10 @@ export default function NightFuryRadar() {
       ctx.strokeRect(bx, by, bw, bh);
       ctx.fillStyle = "#9b7cc8";
       ctx.font = "9px 'Courier New', monospace";
-      ctx.textAlign = "right";
-      ctx.fillText("PLASMA", bx - 5, by + 7);
+      ctx.textAlign = "center";
+      // Draw label above the bar so it doesn't overlap the fill
+      const labelY = by - 6; // 6px above the bar
+      ctx.fillText("PLASMA", bx + bw / 2, labelY);
 
       // Speed
       const sf = 1 + (player.x / W) * 2.2;
@@ -1063,8 +1066,13 @@ export default function NightFuryRadar() {
         justifyContent: "center",
         backgroundColor: "#08081a",
         overflow: "hidden",
+        position: "relative",
       }}
     >
+      {/* User Menu - Top Right */}
+      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
+        <UserMenu />
+      </div>
       <canvas
         ref={canvasRef}
         style={{
