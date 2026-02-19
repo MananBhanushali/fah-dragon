@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "fahOnSpace" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "fahVolume" INTEGER NOT NULL DEFAULT 50;

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import HowToModal from "./HowToModal";
 import UserMenu from "./UserMenu";
+import SettingsModal from "./SettingsModal";
 import Link from "next/link";
 
 export default function Main() {
@@ -11,8 +12,40 @@ export default function Main() {
   const startGameRef = useRef(null);
   const animFrameRef = useRef(null);
   const [howOpen, setHowOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const gameStateRef = useRef(null);
   const [gameMode, setGameMode] = useState(null);
+  const settingsRef = useRef({ fahOnSpace: true, fahVolume: 50 });
+
+  // load user settings once (used by in-game audio/behavior)
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const s = data?.settings;
+        if (s) {
+          settingsRef.current = { fahOnSpace: typeof s.fahOnSpace === 'boolean' ? s.fahOnSpace : true, fahVolume: typeof s.fahVolume === 'number' ? s.fahVolume : 50 };
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Listen for live settings changes (dispatched by SettingsModal)
+  useEffect(() => {
+    function onSettingsChange(e) {
+      const d = e?.detail;
+      if (!d) return;
+      settingsRef.current = {
+        fahOnSpace: typeof d.fahOnSpace === 'boolean' ? d.fahOnSpace : settingsRef.current.fahOnSpace,
+        fahVolume: typeof d.fahVolume === 'number' ? d.fahVolume : settingsRef.current.fahVolume,
+      };
+    }
+    window.addEventListener('fah-settings-changed', onSettingsChange);
+    return () => window.removeEventListener('fah-settings-changed', onSettingsChange);
+  }, []);
 
   const initGame = useCallback((canvas) => {
     const ctx = canvas.getContext("2d");
@@ -24,7 +57,7 @@ export default function Main() {
     dragonImg.src = "/dragon.png";
 
     const pulseSound = new Audio("/fah.mp3");
-    pulseSound.volume = 0.5;
+    pulseSound.volume = (settingsRef.current?.fahVolume ?? 50) / 100;
 
     /* ─── State ─── */
     const STATE = {
@@ -369,9 +402,16 @@ export default function Main() {
 
       sonar.energy = 1;
 
-      // Play sound
+      // Play sound only if `fahOnSpace` is enabled (defaults to true)
       pulseSound.currentTime = 0;
-      pulseSound.play().catch(() => { });
+      try {
+        const enabled = settingsRef.current?.fahOnSpace ?? true;
+        pulseSound.volume = (settingsRef.current?.fahVolume ?? 50) / 100;
+        if (enabled) pulseSound.play().catch(() => { });
+      } catch (err) {
+        // ignore errors and still attempt to play
+        pulseSound.play().catch(() => { });
+      }
     }
 
     /* ─── Collision ─── */
@@ -994,17 +1034,6 @@ export default function Main() {
         ctx.restore();
       }
 
-      // NOTE: control hints moved to left-side HTML panel
-
-      // High score display
-      if (STATE.highScore > 0) {
-        ctx.fillStyle = "#fbbf2488";
-        ctx.font = "11px 'Courier New', monospace";
-        ctx.fillText(`★ BEST: ${STATE.highScore}`, W / 2, H * 0.88);
-      }
-
-      // NOTE: start prompt moved to left-side HTML panel
-
       ctx.restore();
     }
 
@@ -1363,6 +1392,7 @@ export default function Main() {
               How to play
             </button>
             <button
+              onClick={() => setSettingsOpen(true)}
               style={{
                 flex: 1,
                 padding: '16px 20px',
@@ -1383,6 +1413,7 @@ export default function Main() {
         </div>
       )}
       <HowToModal isOpen={howOpen} onClose={() => setHowOpen(false)} />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <canvas
         ref={canvasRef}
         style={{
