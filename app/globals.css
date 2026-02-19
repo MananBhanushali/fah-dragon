@@ -8,7 +8,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #05051a;
+  background: #08081a;
   font-family: 'Courier New', monospace;
   font-size: 18px;
   -webkit-font-smoothing: antialiased;
@@ -16,6 +16,7 @@ html, body {
 
 canvas {
   cursor: auto;
+  background: #08081a;
 }
 
 /* Critical global styles for auth UI to avoid flash-of-unstyled content */

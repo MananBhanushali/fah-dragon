@@ -1310,44 +1310,6 @@ export default function Main() {
             ▶ Play
           </button>
 
-          {/* Create / Join Party row */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-            <button
-              style={{
-                flex: 1,
-                padding: '16px 20px',
-                background: 'rgba(124,58,237,0.12)',
-                border: '1px solid rgba(124,58,237,0.28)',
-                color: '#e9d5ff',
-                borderRadius: 6,
-                fontFamily: 'Courier New, monospace',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontSize: 18,
-                marginBottom: 0,
-              }}
-            >
-              Create Party
-            </button>
-            <button
-              style={{
-                flex: 1,
-                padding: '16px 20px',
-                background: 'rgba(124,58,237,0.12)',
-                border: '1px solid rgba(124,58,237,0.28)',
-                color: '#e9d5ff',
-                borderRadius: 6,
-                fontFamily: 'Courier New, monospace',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontSize: 18,
-                marginBottom: 0,
-              }}
-            >
-              Join Party
-            </button>
-          </div>
-
           {/* Leaderboard */}
           <Link
             href="/leaderboard"
@@ -1418,6 +1380,7 @@ export default function Main() {
         ref={canvasRef}
         style={{
           display: "block",
+          backgroundColor: "#08081a",
         }}
       />
     </div>
