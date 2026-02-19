@@ -16,6 +16,8 @@ export default function Main() {
   const gameStateRef = useRef(null);
   const [gameMode, setGameMode] = useState(null);
   const settingsRef = useRef({ fahOnSpace: true, fahVolume: 50 });
+  const lastLoopTime = useRef(null);
+  const loopCheckInterval = useRef(null);
 
   // load user settings once (used by in-game audio/behavior)
   useEffect(() => {
@@ -89,6 +91,8 @@ export default function Main() {
     const TARGET_FPS = 60;
     const TARGET_FRAME_TIME = 1000 / TARGET_FPS; // ~16.67ms
     let lastTime = performance.now();
+    lastLoopTime.current = lastTime;
+    let lastDebugLog = performance.now();
 
     /* ─── Player ─── */
     const player = {
@@ -202,6 +206,14 @@ export default function Main() {
     function onKeyUp(e) { keys[e.code] = false; }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+
+    // Listen for music load events for debugging
+    function onMusicLoaded(e) {
+      try {
+        console.log('[GAME DEBUG] music loaded', e?.detail?.videoId, 'scrollX=', scrollX, 'mode=', STATE.mode)
+      } catch (err) {}
+    }
+    window.addEventListener('fah-music-loaded', onMusicLoaded);
 
     // Mouse interaction for pause menu: hover to select, click to activate
     function isInMenuBox(mx, my, i) {
@@ -1190,6 +1202,15 @@ export default function Main() {
       // Calculate delta time (dt = 1.0 at 60fps)
       const elapsed = currentTime - lastTime;
       lastTime = currentTime;
+      lastLoopTime.current = currentTime;
+      // Log debug metrics once per second
+      try {
+        if (currentTime - lastDebugLog > 1000) {
+          lastDebugLog = currentTime;
+          // lightweight log showing whether scrollX is advancing
+          console.log('[GAME DEBUG] scrollX=', Math.floor(scrollX), 'mode=', STATE.mode, 'player.vx=', Number(player.vx.toFixed(3)))
+        }
+      } catch (err) {}
       // Clamp dt to prevent huge jumps (e.g., after tab switch)
       const dt = Math.min(elapsed / TARGET_FRAME_TIME, 3);
 
@@ -1203,6 +1224,7 @@ export default function Main() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener('fah-music-loaded', onMusicLoaded);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mousedown', onMouseDown);
       // clear exposed start handler
@@ -1244,6 +1266,25 @@ export default function Main() {
     return () => {
       window.removeEventListener("resize", resize);
       if (gameRef.current) gameRef.current();
+    };
+  }, [initGame]);
+
+  // Add a check to ensure the game loop is running
+  useEffect(() => {
+    loopCheckInterval.current = setInterval(() => {
+      if (lastLoopTime.current && (performance.now() - lastLoopTime.current > 1000)) {
+        console.warn("Game loop stalled. Restarting.");
+        if (gameRef.current) gameRef.current();
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const cleanup = initGame(canvas);
+          gameRef.current = cleanup;
+        }
+      }
+    }, 2000);
+
+    return () => {
+      if (loopCheckInterval.current) clearInterval(loopCheckInterval.current);
     };
   }, [initGame]);
 
@@ -1378,6 +1419,7 @@ export default function Main() {
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <canvas
         ref={canvasRef}
+        tabIndex={0}
         style={{
           display: "block",
           backgroundColor: "#08081a",

@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
+import MusicPlayer from "./components/MusicPlayer";
 
 export const metadata = {
   title: "Fah Dragon",
@@ -12,6 +13,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <AuthProvider>{children}</AuthProvider>
+        <MusicPlayer />
       </body>
     </html>
   );
