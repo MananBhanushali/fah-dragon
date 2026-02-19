@@ -16,6 +16,7 @@ export async function GET() {
         id: true,
         username: true,
         displayName: true,
+        bestScore: true,
         createdAt: true,
       },
     });

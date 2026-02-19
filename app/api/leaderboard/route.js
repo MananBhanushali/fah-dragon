@@ -76,6 +76,18 @@ export async function POST(request) {
         },
       },
     });
+    // Update user's bestScore if applicable
+    let bestScore = null;
+    if (userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      const currentBest = user?.bestScore ?? 0;
+      if (newScore.score > currentBest) {
+        await prisma.user.update({ where: { id: userId }, data: { bestScore: newScore.score } });
+        bestScore = newScore.score;
+      } else {
+        bestScore = currentBest;
+      }
+    }
 
     // Get the rank of this score
     const rank = await prisma.score.count({
@@ -92,6 +104,7 @@ export async function POST(request) {
         rank,
         playerName: newScore.user?.displayName || newScore.user?.username || newScore.guestName,
         isGuest: !newScore.userId,
+        bestScore,
       },
     });
   } catch (error) {

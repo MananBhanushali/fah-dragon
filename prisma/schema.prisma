@@ -17,6 +17,7 @@ model User {
   displayName  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  bestScore    Int      @default(0)
 
   // Relations
   scores       Score[]

@@ -3,10 +3,12 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import HowToModal from "./HowToModal";
 import UserMenu from "./UserMenu";
+import Link from "next/link";
 
-export default function NightFuryRadar() {
+export default function Main() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
+  const startGameRef = useRef(null);
   const animFrameRef = useRef(null);
   const [howOpen, setHowOpen] = useState(false);
   const gameStateRef = useRef(null);
@@ -29,6 +31,7 @@ export default function NightFuryRadar() {
       mode: "START",
       score: 0,
       highScore: 0,
+      submitted: false,
       crashTimer: 0,
       crashDuration: 80,
       pauseSelection: 0, // 0 = Resume, 1 = Restart, 2 = Main Menu
@@ -43,6 +46,9 @@ export default function NightFuryRadar() {
       setGameMode(newMode);
       if (newMode === 'PLAY') setHowOpen(false);
     }
+
+    // expose startGame to React layer
+    startGameRef.current = startGame;
     // initialize react-visible mode
     setGameMode(STATE.mode);
 
@@ -50,8 +56,6 @@ export default function NightFuryRadar() {
     const TARGET_FPS = 60;
     const TARGET_FRAME_TIME = 1000 / TARGET_FPS; // ~16.67ms
     let lastTime = performance.now();
-
-
 
     /* ─── Player ─── */
     const player = {
@@ -104,7 +108,7 @@ export default function NightFuryRadar() {
     /* ─── Input ─── */
     function onKeyDown(e) {
       keys[e.code] = true;
-      
+
       // ESC for pause/resume
       if (e.code === "Escape") {
         e.preventDefault();
@@ -116,7 +120,7 @@ export default function NightFuryRadar() {
         }
         return;
       }
-      
+
       // Pause menu navigation
       if (STATE.mode === "PAUSED") {
         if (e.code === "ArrowUp" || e.code === "KeyW") {
@@ -154,7 +158,7 @@ export default function NightFuryRadar() {
           return;
         }
       }
-      
+
       if (e.code === "Space") {
         e.preventDefault();
         if (STATE.mode === "START") startGame();
@@ -267,6 +271,7 @@ export default function NightFuryRadar() {
     function startGame() {
       setMode("PLAY");
       STATE.score = 0;
+      STATE.submitted = false;
       STATE.crashTimer = 0;
       player.x = W * 0.22;
       player.y = H / 2;
@@ -303,6 +308,7 @@ export default function NightFuryRadar() {
     function goToMainMenu() {
       setMode("START");
       STATE.score = 0;
+      STATE.submitted = false;
       STATE.crashTimer = 0;
       STATE.pauseSelection = 0;
       player.x = W * 0.22;
@@ -330,7 +336,7 @@ export default function NightFuryRadar() {
       pulse.energy -= pulse.cost;
 
       const isFireball = activePowerups.fireball.active;
-      
+
       // Always fire a normal pulse for visibility
       pulses.push({
         x: player.x + player.width / 2,
@@ -343,7 +349,7 @@ export default function NightFuryRadar() {
         hue: isFireball ? 0 : 260 + Math.random() * 40,
         isFireball: isFireball,
       });
-      
+
       if (isFireball) {
         pulses.push({
           x: player.x + player.width / 2,
@@ -412,6 +418,31 @@ export default function NightFuryRadar() {
       STATE.pauseSelection = 0;
       if (STATE.score > STATE.highScore) STATE.highScore = STATE.score;
       shake.i = 14;
+
+      // submit the score once (prevents double-submit during crash loop)
+      if (!STATE.submitted) {
+        STATE.submitted = true;
+        submitScore(STATE.score).catch(() => {});
+      }
+    }
+
+    // Submit score to server and update user's best from response
+    async function submitScore(score) {
+      try {
+        const resp = await fetch('/api/leaderboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ score, gameMode: STATE.mode || 'classic' }),
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const best = data?.score?.bestScore;
+        if (typeof best === 'number' && best > STATE.highScore) {
+          STATE.highScore = best;
+        }
+      } catch (err) {
+        // ignore
+      }
     }
 
     /* ─── Draw Dragon ─── */
@@ -758,7 +789,7 @@ export default function NightFuryRadar() {
           const ringOffset = i * 6;
           const ringR = Math.max(0, p.r - ringOffset);
           const ringAlpha = p.a * (1 - i * 0.2) * 0.6; // More subtle opacity
-          
+
           if (ringR > 5 && ringAlpha > 0.01) {
             // Outer glow ring
             ctx.strokeStyle = `hsla(${p.hue + i * 10}, 80%, 60%, ${ringAlpha * 0.4})`;
@@ -766,7 +797,7 @@ export default function NightFuryRadar() {
             ctx.beginPath();
             ctx.arc(p.x, p.y, ringR, 0, Math.PI * 2);
             ctx.stroke();
-            
+
             // Inner sharp ring
             ctx.strokeStyle = `hsla(${p.hue + i * 15}, 100%, 75%, ${ringAlpha * 0.7})`;
             ctx.lineWidth = 1.5 - i * 0.3;
@@ -911,7 +942,7 @@ export default function NightFuryRadar() {
     function drawStart() {
       const t = Date.now() * 0.001;
       const p = 0.5 + 0.5 * Math.sin(t * 2);
-      
+
       // Animated background particles
       ctx.save();
       for (let i = 0; i < 30; i++) {
@@ -927,7 +958,7 @@ export default function NightFuryRadar() {
       ctx.restore();
 
       ctx.save();
-      
+
       // Title with glow effect (renamed to Fah Dragon)
       const titleY = H * 0.20;
       ctx.shadowColor = "#a855f7";
@@ -942,7 +973,6 @@ export default function NightFuryRadar() {
       ctx.shadowColor = "#7c3aed";
       ctx.fillStyle = "#a78bfa";
 
-
       // Tagline
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#6b5b9566";
@@ -952,11 +982,11 @@ export default function NightFuryRadar() {
       // Dragon preview with floating animation
       if (dragonImg.complete && dragonImg.naturalWidth > 0) {
         ctx.save();
-        const dragonY = H * 0.48 + Math.sin(t * 1.5) * 8;
+        const dragonY = H * 0.40 + Math.sin(t * 1.5) * 8;
         const dragonScale = 1 + Math.sin(t * 2) * 0.03;
         ctx.translate(W / 2, dragonY);
         ctx.scale(-dragonScale, dragonScale);
-        
+
         // Glow behind dragon
         ctx.shadowColor = "#a855f7";
         ctx.shadowBlur = 25;
@@ -980,36 +1010,36 @@ export default function NightFuryRadar() {
 
     function drawPause() {
       const t = Date.now() * 0.001;
-      
+
       ctx.save();
-      
+
       // Darken background
       ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
       ctx.fillRect(0, 0, W, H);
-      
+
       // Pause title
       ctx.shadowColor = "#a855f7";
       ctx.shadowBlur = 20;
       ctx.fillStyle = "#c084fc";
-        ctx.font = "bold 48px 'Courier New', monospace";
+      ctx.font = "bold 48px 'Courier New', monospace";
       ctx.textAlign = "center";
       ctx.fillText("PAUSED", W / 2, H * 0.28);
-      
+
       // Current score
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#9b7cc888";
-        ctx.font = "18px 'Courier New', monospace";
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#9b7cc888";
+      ctx.font = "18px 'Courier New', monospace";
       ctx.fillText(`DISTANCE: ${STATE.score}`, W / 2, H * 0.36);
-      
+
       // Menu options (use a plain home symbol instead of colorful emoji)
       const options = ["▶  RESUME", "↻  RESTART", "⌂  MAIN MENU"];
       const menuY = H * 0.48;
       const menuSpacing = 50;
-      
+
       for (let i = 0; i < options.length; i++) {
         const isSelected = STATE.pauseSelection === i;
         const y = menuY + i * menuSpacing;
-        
+
         if (isSelected) {
           // Selection highlight box
           const boxW = 220;
@@ -1021,27 +1051,27 @@ export default function NightFuryRadar() {
           ctx.roundRect((W - boxW) / 2, y - 22, boxW, boxH, 6);
           ctx.fill();
           ctx.stroke();
-          
+
           // Selected text
           ctx.shadowColor = "#a855f7";
           ctx.shadowBlur = 12;
-            ctx.fillStyle = "#e9d5ff";
-            ctx.font = "bold 20px 'Courier New', monospace";
+          ctx.fillStyle = "#e9d5ff";
+          ctx.font = "bold 20px 'Courier New', monospace";
         } else {
           ctx.shadowBlur = 0;
           ctx.fillStyle = "#7c6b9a88";
-            ctx.font = "16px 'Courier New', monospace";
+          ctx.font = "16px 'Courier New', monospace";
         }
-        
+
         ctx.fillText(options[i], W / 2, y);
       }
-      
+
       // Navigation hint
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#5a4d7a55";
-        ctx.font = "12px 'Courier New', monospace";
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#5a4d7a55";
+      ctx.font = "12px 'Courier New', monospace";
       ctx.fillText("[↑↓] Navigate   [SPACE/ENTER] Select   [ESC] Resume", W / 2, H * 0.88);
-      
+
       ctx.restore();
     }
 
@@ -1146,6 +1176,8 @@ export default function NightFuryRadar() {
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mousedown', onMouseDown);
+      // clear exposed start handler
+      if (startGameRef) startGameRef.current = null;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, []);
@@ -1163,6 +1195,23 @@ export default function NightFuryRadar() {
 
     const cleanup = initGame(canvas);
     gameRef.current = cleanup;
+
+    // hydrate high score from authenticated user (if any)
+    (async () => {
+      try {
+        const resp = await fetch('/api/auth/me');
+        const ct = resp.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await resp.json();
+          const best = data?.user?.bestScore;
+          if (typeof best === 'number' && gameStateRef.current) {
+            gameStateRef.current.highScore = best;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
     return () => {
       window.removeEventListener("resize", resize);
       if (gameRef.current) gameRef.current();
@@ -1186,17 +1235,151 @@ export default function NightFuryRadar() {
       <div style={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
         <UserMenu />
       </div>
-      {/* How to Play button + modal */}
+      {/* Centered start UI overlay (visible on START) */}
       {(gameMode === null || gameMode === 'START') && (
-        <div style={{ position: "absolute", left: 20, top: 16, zIndex: 90 }}>
+        <div
+          style={{
+            position: 'absolute',
+            zIndex: 95,
+            top: 'calc(50% + 150px)',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            gap: 0,
+            pointerEvents: 'auto',
+            background: 'rgba(8,8,26,0.85)',
+            border: '2px solid rgba(124,58,237,0.4)',
+            borderRadius: 8,
+            padding: 12,
+            minWidth: 420,
+            maxWidth: 780,
+          }}
+        >
+          {/* Play */}
           <button
-            className="login-button"
             onClick={() => {
-              if (gameMode !== 'PLAY') setHowOpen(true);
+              if (startGameRef.current) startGameRef.current();
+            }}
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: '16px 20px',
+              background: 'rgba(124,58,237,0.25)',
+              border: '1px solid rgba(124,58,237,0.28)',
+              color: '#e9d5ff',
+              borderRadius: 6,
+              textDecoration: 'none',
+              fontFamily: 'Courier New, monospace',
+              fontWeight: 700,
+              fontSize: 20,
+              cursor: 'pointer',
+              marginBottom: 10,
             }}
           >
-            How to play
+            ▶ Play
           </button>
+
+          {/* Create / Join Party row */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            <button
+              style={{
+                flex: 1,
+                padding: '16px 20px',
+                background: 'rgba(124,58,237,0.12)',
+                border: '1px solid rgba(124,58,237,0.28)',
+                color: '#e9d5ff',
+                borderRadius: 6,
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: 18,
+                marginBottom: 0,
+              }}
+            >
+              Create Party
+            </button>
+            <button
+              style={{
+                flex: 1,
+                padding: '16px 20px',
+                background: 'rgba(124,58,237,0.12)',
+                border: '1px solid rgba(124,58,237,0.28)',
+                color: '#e9d5ff',
+                borderRadius: 6,
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: 18,
+                marginBottom: 0,
+              }}
+            >
+              Join Party
+            </button>
+          </div>
+
+          {/* Leaderboard */}
+          <Link
+            href="/leaderboard"
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: '16px 20px',
+              background: 'rgba(124,58,237,0.12)',
+              border: '1px solid rgba(124,58,237,0.28)',
+              color: '#e9d5ff',
+              borderRadius: 6,
+              textDecoration: 'none',
+              fontFamily: 'Courier New, monospace',
+              fontWeight: 700,
+              textAlign: 'center',
+              fontSize: 18,
+              marginBottom: 6,
+              boxSizing: 'border-box',
+            }}
+          >
+            Leaderboard
+          </Link>
+
+          {/* How to play / Settings row */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setHowOpen(true)}
+              style={{
+                flex: 1,
+                padding: '16px 20px',
+                background: 'rgba(124,58,237,0.12)',
+                border: '1px solid rgba(124,58,237,0.28)',
+                color: '#e9d5ff',
+                borderRadius: 6,
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: 18,
+                marginBottom: 0,
+              }}
+            >
+              How to play
+            </button>
+            <button
+              style={{
+                flex: 1,
+                padding: '16px 20px',
+                background: 'rgba(124,58,237,0.12)',
+                border: '1px solid rgba(124,58,237,0.28)',
+                color: '#e9d5ff',
+                borderRadius: 6,
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: 18,
+                marginBottom: 0,
+              }}
+            >
+              Settings
+            </button>
+          </div>
         </div>
       )}
       <HowToModal isOpen={howOpen} onClose={() => setHowOpen(false)} />

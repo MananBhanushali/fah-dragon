@@ -1,5 +1,5 @@
-import NightFuryRadar from "./components/NightFuryRadar";
+import Main from "./components";
 
 export default function Home() {
-  return <NightFuryRadar />;
+  return <Main />;
 }
