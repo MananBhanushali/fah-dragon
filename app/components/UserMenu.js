@@ -57,7 +57,7 @@ export default function UserMenu() {
         .user-menu-loading {
           color: #6b5b95;
           padding: 8px 16px;
-          font-size: 12px;
+          font-size: 14px;
           font-family: 'Courier New', monospace;
         }
 
@@ -66,8 +66,8 @@ export default function UserMenu() {
           border: 1px solid rgba(140, 80, 220, 0.4);
           border-radius: 6px;
           color: #9b7cc8;
-          padding: 8px 16px;
-          font-size: 12px;
+          padding: 10px 18px;
+          font-size: 14px;
           font-family: 'Courier New', monospace;
           font-weight: 600;
           cursor: pointer;
@@ -94,7 +94,7 @@ export default function UserMenu() {
           background: rgba(140, 80, 220, 0.15);
           border: 1px solid rgba(140, 80, 220, 0.4);
           border-radius: 6px;
-          padding: 6px 12px;
+          padding: 10px 18px;
           cursor: pointer;
           transition: all 0.2s ease;
         }
@@ -106,8 +106,8 @@ export default function UserMenu() {
         }
 
         .user-avatar {
-          width: 28px;
-          height: 28px;
+          width: 36px;
+          height: 36px;
           background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
           border-radius: 50%;
           display: flex;
@@ -115,13 +115,13 @@ export default function UserMenu() {
           justify-content: center;
           color: #fff;
           font-weight: 600;
-          font-size: 12px;
+          font-size: 16px;
           font-family: 'Courier New', monospace;
         }
 
         .user-name {
           color: #9b7cc8;
-          font-size: 12px;
+          font-size: 16px;
           font-family: 'Courier New', monospace;
           text-transform: uppercase;
           letter-spacing: 1px;
@@ -151,23 +151,23 @@ export default function UserMenu() {
 
         .user-dropdown-header strong {
           color: #c084fc;
-          font-size: 13px;
+          font-size: 15px;
           font-family: 'Courier New', monospace;
         }
 
         .user-dropdown-header span {
           color: #6b5b95;
-          font-size: 11px;
+          font-size: 13px;
           font-family: 'Courier New', monospace;
         }
 
         .user-dropdown button {
           width: 100%;
-          padding: 12px 16px;
+          padding: 14px 18px;
           background: none;
           border: none;
           color: #c44;
-          font-size: 12px;
+          font-size: 14px;
           font-family: 'Courier New', monospace;
           text-align: left;
           cursor: pointer;

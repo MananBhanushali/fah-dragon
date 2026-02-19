@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import HowToModal from "./HowToModal";
 import UserMenu from "./UserMenu";
 
 export default function NightFuryRadar() {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
   const animFrameRef = useRef(null);
+  const [howOpen, setHowOpen] = useState(false);
+  const gameStateRef = useRef(null);
+  const [gameMode, setGameMode] = useState(null);
 
   const initGame = useCallback((canvas) => {
     const ctx = canvas.getContext("2d");
@@ -29,6 +33,18 @@ export default function NightFuryRadar() {
       crashDuration: 80,
       pauseSelection: 0, // 0 = Resume, 1 = Restart, 2 = Main Menu
     };
+
+    // expose state object so React component can read current mode
+    gameStateRef.current = STATE;
+
+    // helper to set mode and notify React so UI can react to mode changes
+    function setMode(newMode) {
+      STATE.mode = newMode;
+      setGameMode(newMode);
+      if (newMode === 'PLAY') setHowOpen(false);
+    }
+    // initialize react-visible mode
+    setGameMode(STATE.mode);
 
     /* ─── Delta Time (frame-rate independence) ─── */
     const TARGET_FPS = 60;
@@ -93,10 +109,10 @@ export default function NightFuryRadar() {
       if (e.code === "Escape") {
         e.preventDefault();
         if (STATE.mode === "PLAY") {
-          STATE.mode = "PAUSED";
+          setMode("PAUSED");
           STATE.pauseSelection = 0;
         } else if (STATE.mode === "PAUSED") {
-          STATE.mode = "PLAY";
+          setMode("PLAY");
         }
         return;
       }
@@ -111,7 +127,7 @@ export default function NightFuryRadar() {
           e.preventDefault();
           if (STATE.pauseSelection === 0) {
             // Resume
-            STATE.mode = "PLAY";
+            setMode("PLAY");
           } else if (STATE.pauseSelection === 1) {
             // Restart
             startGame();
@@ -121,6 +137,22 @@ export default function NightFuryRadar() {
           }
         }
         return;
+      }
+
+      // Crash menu navigation (after crash animation finished)
+      if (STATE.mode === "CRASH" && STATE.crashTimer <= 0) {
+        if (e.code === "ArrowUp" || e.code === "KeyW") {
+          STATE.pauseSelection = (STATE.pauseSelection - 1 + 2) % 2;
+          return;
+        } else if (e.code === "ArrowDown" || e.code === "KeyS") {
+          STATE.pauseSelection = (STATE.pauseSelection + 1) % 2;
+          return;
+        } else if (e.code === "Enter") {
+          e.preventDefault();
+          if (STATE.pauseSelection === 0) startGame();
+          else if (STATE.pauseSelection === 1) goToMainMenu();
+          return;
+        }
       }
       
       if (e.code === "Space") {
@@ -133,6 +165,63 @@ export default function NightFuryRadar() {
     function onKeyUp(e) { keys[e.code] = false; }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+
+    // Mouse interaction for pause menu: hover to select, click to activate
+    function isInMenuBox(mx, my, i) {
+      const menuY = H * 0.48;
+      const menuSpacing = 50;
+      const y = menuY + i * menuSpacing;
+      const boxW = 220;
+      const boxH = 36;
+      const left = (W - boxW) / 2;
+      const top = y - 22;
+      return mx >= left && mx <= left + boxW && my >= top && my <= top + boxH;
+    }
+
+    function onMouseMove(e) {
+      if (STATE.mode !== "PAUSED" && !(STATE.mode === "CRASH" && STATE.crashTimer <= 0)) return;
+      // canvas client coords map directly to canvas width/height here
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      let hovered = -1;
+      const count = STATE.mode === "PAUSED" ? 3 : 2;
+      for (let i = 0; i < count; i++) {
+        if (isInMenuBox(mx, my, i)) { hovered = i; break; }
+      }
+      if (hovered !== -1) {
+        STATE.pauseSelection = hovered;
+        canvas.style.cursor = 'pointer';
+      } else {
+        canvas.style.cursor = '';
+      }
+    }
+
+    function onMouseDown(e) {
+      if (STATE.mode !== "PAUSED" && !(STATE.mode === "CRASH" && STATE.crashTimer <= 0)) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const count = STATE.mode === "PAUSED" ? 3 : 2;
+      for (let i = 0; i < count; i++) {
+        if (isInMenuBox(mx, my, i)) {
+          // Activate selection (for PAUSED: 0=Resume,1=Restart,2=Main Menu)
+          if (STATE.mode === "PAUSED") {
+            if (i === 0) setMode("PLAY");
+            else if (i === 1) startGame();
+            else if (i === 2) goToMainMenu();
+          } else {
+            // CRASH: 0=Restart,1=Main Menu
+            if (i === 0) startGame();
+            else if (i === 1) goToMainMenu();
+          }
+          return;
+        }
+      }
+    }
+
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mousedown', onMouseDown);
 
     /* ─── Obstacle Generation ─── */
     function makePillar(x, isTop, pairH = 0) {
@@ -176,7 +265,7 @@ export default function NightFuryRadar() {
 
     /* ─── Start / Reset ─── */
     function startGame() {
-      STATE.mode = "PLAY";
+      setMode("PLAY");
       STATE.score = 0;
       STATE.crashTimer = 0;
       player.x = W * 0.22;
@@ -212,7 +301,7 @@ export default function NightFuryRadar() {
 
     /* ─── Go to Main Menu ─── */
     function goToMainMenu() {
-      STATE.mode = "START";
+      setMode("START");
       STATE.score = 0;
       STATE.crashTimer = 0;
       STATE.pauseSelection = 0;
@@ -318,8 +407,9 @@ export default function NightFuryRadar() {
 
     /* ─── Crash ─── */
     function triggerCrash() {
-      STATE.mode = "CRASH";
+      setMode("CRASH");
       STATE.crashTimer = STATE.crashDuration;
+      STATE.pauseSelection = 0;
       if (STATE.score > STATE.highScore) STATE.highScore = STATE.score;
       shake.i = 14;
     }
@@ -743,19 +833,21 @@ export default function NightFuryRadar() {
 
     function drawHUD() {
       ctx.save();
+      const distY = 40;
+      const spacing = 24; // vertical spacing between HUD lines
       ctx.fillStyle = "#9b7cc8";
-      ctx.font = "bold 16px 'Courier New', monospace";
+      ctx.font = "bold 28px 'Courier New', monospace";
       ctx.textAlign = "left";
-      ctx.fillText(`DIST: ${STATE.score}`, 18, 32);
+      ctx.fillText(`DIST: ${STATE.score}`, 18, distY);
 
-      if (STATE.highScore > 0) {
-        ctx.fillStyle = "#5a3d8a66";
-        ctx.font = "11px 'Courier New', monospace";
-        ctx.fillText(`BEST: ${STATE.highScore}`, 18, 50);
-      }
+      // Always show BEST line — show '-' when no high score recorded
+      const bestValue = STATE.highScore > 0 ? STATE.highScore : "-";
+      ctx.fillStyle = "#9b7cc8";
+      ctx.font = "24px 'Courier New', monospace";
+      ctx.fillText(`BEST: ${bestValue}`, 18, distY + spacing);
 
       // Plasma bar (center top to avoid overlapping right-side UI)
-      const bw = 200, bh = 8, bx = (W - bw) / 2, by = 26;
+      const bw = 240, bh = 10, bx = (W - bw) / 2, by = 36;
       ctx.fillStyle = "#12081e";
       ctx.fillRect(bx, by, bw, bh);
       const fill = pulse.energy / pulse.max;
@@ -765,34 +857,34 @@ export default function NightFuryRadar() {
       ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, bw, bh);
       ctx.fillStyle = "#9b7cc8";
-      ctx.font = "9px 'Courier New', monospace";
+      ctx.font = "20px 'Courier New', monospace";
       ctx.textAlign = "center";
       // Draw label above the bar so it doesn't overlap the fill
-      const labelY = by - 6; // 6px above the bar
+      const labelY = by - 8; // above the bar
       ctx.fillText("PLASMA", bx + bw / 2, labelY);
 
       // Speed
       const sf = 1 + (player.x / W) * 2.2;
       const sl = Math.min(3, Math.floor(sf));
       ctx.fillStyle = sl >= 3 ? "#c44" : sl >= 2 ? "#b98030" : "#9b7cc8";
-      ctx.font = "9px 'Courier New', monospace";
+      ctx.font = "20px 'Courier New', monospace";
       ctx.textAlign = "left";
-      ctx.fillText(`SPD ${"▮".repeat(sl)}${"▯".repeat(3 - sl)}`, 18, 66);
+      ctx.fillText(`SPD ${"▮".repeat(sl)}${"▯".repeat(3 - sl)}`, 18, 88);
 
       // Active powerups display
-      let pyOffset = 82;
+      let pyOffset = 106;
       if (activePowerups.immunity.active) {
         const timeLeft = Math.ceil(activePowerups.immunity.timer / 60);
         ctx.fillStyle = '#39ff14';
-        ctx.font = 'bold 10px "Courier New", monospace';
+        ctx.font = 'bold 18px "Courier New", monospace';
         ctx.fillText(`◆ IMMUNITY ${timeLeft}s`, 18, pyOffset);
-        pyOffset += 14;
+        pyOffset += 16;
       }
       if (activePowerups.fireball.active) {
         ctx.fillStyle = '#ff4444';
-        ctx.font = 'bold 10px "Courier New", monospace';
+        ctx.font = 'bold 18px "Courier New", monospace';
         ctx.fillText(`◉ FIREBALL READY`, 18, pyOffset);
-        pyOffset += 14;
+        pyOffset += 16;
       }
 
       ctx.restore();
@@ -806,13 +898,13 @@ export default function NightFuryRadar() {
       for (let i = 0; i < n; i++) {
         const h = Math.abs(sonar.bars[i]) * 16;
         const a = 0.1 + Math.abs(sonar.bars[i]) * 3;
-        ctx.fillStyle = `rgba(100, 50, 170, ${Math.min(0.7, a)})`;
-        ctx.fillRect(i * bw + 1, base - h / 2, bw - 2, h);
-      }
-      ctx.fillStyle = "#5c2d9122";
-      ctx.font = "8px 'Courier New', monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("◈ SONAR ◈", W / 2, H - 5);
+          ctx.fillStyle = `rgba(100, 50, 170, ${Math.min(0.7, a)})`;
+          ctx.fillRect(i * bw + 1, base - h / 2, bw - 2, h);
+        }
+        ctx.fillStyle = "#5c2d9122";
+        ctx.font = "10px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("◈ SONAR ◈", W / 2, H - 8);
       ctx.restore();
     }
 
@@ -836,27 +928,26 @@ export default function NightFuryRadar() {
 
       ctx.save();
       
-      // Title with glow effect
-      const titleY = H * 0.22;
+      // Title with glow effect (renamed to Fah Dragon)
+      const titleY = H * 0.20;
       ctx.shadowColor = "#a855f7";
-      ctx.shadowBlur = 30 + p * 20;
+      ctx.shadowBlur = 40 + p * 25;
       ctx.fillStyle = "#c084fc";
-      ctx.font = "bold 48px 'Courier New', monospace";
+      ctx.font = "900 80px 'Teko', sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("NIGHT FURY", W / 2, titleY);
-      
+      ctx.fillText("FAH DRAGON", W / 2, titleY);
+
       // Subtitle
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
       ctx.shadowColor = "#7c3aed";
       ctx.fillStyle = "#a78bfa";
-      ctx.font = "bold 20px 'Courier New', monospace";
-      ctx.fillText("R A D A R", W / 2, titleY + 35);
-      
+
+
       // Tagline
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#6b5b9566";
-      ctx.font = "italic 13px 'Courier New', monospace";
-      ctx.fillText("◈ fly blind. pulse to see. ◈", W / 2, titleY + 65);
+      ctx.font = "italic 22px 'Courier New', monospace";
+      ctx.fillText("◈ fly blind. pulse to see. ◈", W / 2, titleY + 94);
 
       // Dragon preview with floating animation
       if (dragonImg.complete && dragonImg.naturalWidth > 0) {
@@ -873,28 +964,7 @@ export default function NightFuryRadar() {
         ctx.restore();
       }
 
-      // Control hints box
-      const boxY = H * 0.66;
-      const boxW = 280;
-      const boxH = 80;
-      const boxX = (W - boxW) / 2;
-      
-      ctx.fillStyle = "rgba(20, 10, 40, 0.6)";
-      ctx.strokeStyle = "rgba(140, 80, 220, 0.3)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(boxX, boxY, boxW, boxH, 8);
-      ctx.fill();
-      ctx.stroke();
-      
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#9b7cc8";
-      ctx.font = "12px 'Courier New', monospace";
-      ctx.fillText("[W A S D]  or  [↑ ↓ ← →]  —  FLY", W / 2, boxY + 25);
-      ctx.fillText("[SPACE]  —  SONAR PULSE", W / 2, boxY + 45);
-      ctx.fillStyle = "#7c6b9a88";
-      ctx.font = "10px 'Courier New', monospace";
-      ctx.fillText("[ESC]  —  PAUSE", W / 2, boxY + 65);
+      // NOTE: control hints moved to left-side HTML panel
 
       // High score display
       if (STATE.highScore > 0) {
@@ -903,13 +973,7 @@ export default function NightFuryRadar() {
         ctx.fillText(`★ BEST: ${STATE.highScore}`, W / 2, H * 0.88);
       }
 
-      // Animated start prompt
-      const promptAlpha = 0.4 + p * 0.6;
-      ctx.shadowColor = "#a855f7";
-      ctx.shadowBlur = 15 * p;
-      ctx.fillStyle = `rgba(192, 132, 252, ${promptAlpha})`;
-      ctx.font = "bold 16px 'Courier New', monospace";
-      ctx.fillText("▶  PRESS SPACE TO FLY  ◀", W / 2, H * 0.94);
+      // NOTE: start prompt moved to left-side HTML panel
 
       ctx.restore();
     }
@@ -927,18 +991,18 @@ export default function NightFuryRadar() {
       ctx.shadowColor = "#a855f7";
       ctx.shadowBlur = 20;
       ctx.fillStyle = "#c084fc";
-      ctx.font = "bold 36px 'Courier New', monospace";
+        ctx.font = "bold 48px 'Courier New', monospace";
       ctx.textAlign = "center";
       ctx.fillText("PAUSED", W / 2, H * 0.28);
       
       // Current score
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#9b7cc888";
-      ctx.font = "14px 'Courier New', monospace";
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#9b7cc888";
+        ctx.font = "18px 'Courier New', monospace";
       ctx.fillText(`DISTANCE: ${STATE.score}`, W / 2, H * 0.36);
       
-      // Menu options
-      const options = ["▶  RESUME", "↻  RESTART", "◀  MAIN MENU"];
+      // Menu options (use a plain home symbol instead of colorful emoji)
+      const options = ["▶  RESUME", "↻  RESTART", "⌂  MAIN MENU"];
       const menuY = H * 0.48;
       const menuSpacing = 50;
       
@@ -961,21 +1025,21 @@ export default function NightFuryRadar() {
           // Selected text
           ctx.shadowColor = "#a855f7";
           ctx.shadowBlur = 12;
-          ctx.fillStyle = "#e9d5ff";
-          ctx.font = "bold 16px 'Courier New', monospace";
+            ctx.fillStyle = "#e9d5ff";
+            ctx.font = "bold 20px 'Courier New', monospace";
         } else {
           ctx.shadowBlur = 0;
           ctx.fillStyle = "#7c6b9a88";
-          ctx.font = "14px 'Courier New', monospace";
+            ctx.font = "16px 'Courier New', monospace";
         }
         
         ctx.fillText(options[i], W / 2, y);
       }
       
       // Navigation hint
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "#5a4d7a55";
-      ctx.font = "10px 'Courier New', monospace";
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#5a4d7a55";
+        ctx.font = "12px 'Courier New', monospace";
       ctx.fillText("[↑↓] Navigate   [SPACE/ENTER] Select   [ESC] Resume", W / 2, H * 0.88);
       
       ctx.restore();
@@ -1007,10 +1071,57 @@ export default function NightFuryRadar() {
         ctx.fillStyle = "#9b7cc8";
         ctx.font = "16px 'Courier New', monospace";
         ctx.textAlign = "center";
-        ctx.fillText(`DISTANCE: ${STATE.score}`, W / 2, H / 2 - 14);
         ctx.font = "12px 'Courier New', monospace";
         ctx.fillStyle = "#9b7cc888";
         ctx.fillText("[ SPACE TO RETRY ]", W / 2, H / 2 + 14);
+        ctx.restore();
+      }
+      else if (STATE.crashTimer <= 0) {
+        // Post-crash menu: Restart / Main Menu
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#9b7cc8";
+        ctx.font = "18px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        // distance text omitted to prevent overlapping the menu
+
+        const options = ["↻  RESTART", "⌂  MAIN MENU"];
+        const menuY = H * 0.48;
+        const menuSpacing = 50;
+
+        for (let i = 0; i < options.length; i++) {
+          const isSelected = STATE.pauseSelection === i;
+          const y = menuY + i * menuSpacing;
+
+          if (isSelected) {
+            const boxW = 220;
+            const boxH = 36;
+            ctx.fillStyle = "rgba(140, 80, 220, 0.2)";
+            ctx.strokeStyle = "#a855f7";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect((W - boxW) / 2, y - 22, boxW, boxH, 6);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.shadowColor = "#a855f7";
+            ctx.shadowBlur = 12;
+            ctx.fillStyle = "#e9d5ff";
+            ctx.font = "bold 20px 'Courier New', monospace";
+          } else {
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = "#7c6b9a88";
+            ctx.font = "16px 'Courier New', monospace";
+          }
+
+          ctx.fillText(options[i], W / 2, y);
+        }
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#5a4d7a55";
+        ctx.font = "12px 'Courier New', monospace";
+        ctx.fillText("[↑↓] Navigate   [ENTER] Select   [SPACE] Restart", W / 2, H * 0.88);
+
         ctx.restore();
       }
     }
@@ -1033,6 +1144,8 @@ export default function NightFuryRadar() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mousedown', onMouseDown);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, []);
@@ -1073,6 +1186,20 @@ export default function NightFuryRadar() {
       <div style={{ position: "absolute", top: 16, right: 16, zIndex: 100 }}>
         <UserMenu />
       </div>
+      {/* How to Play button + modal */}
+      {(gameMode === null || gameMode === 'START') && (
+        <div style={{ position: "absolute", left: 20, top: 16, zIndex: 90 }}>
+          <button
+            className="login-button"
+            onClick={() => {
+              if (gameMode !== 'PLAY') setHowOpen(true);
+            }}
+          >
+            How to play
+          </button>
+        </div>
+      )}
+      <HowToModal isOpen={howOpen} onClose={() => setHowOpen(false)} />
       <canvas
         ref={canvasRef}
         style={{

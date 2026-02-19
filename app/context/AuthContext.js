@@ -6,7 +6,8 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // start with not-loading so UI can render login button immediately
+  const [loading, setLoading] = useState(false);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -15,21 +16,40 @@ export function AuthProvider({ children }) {
       if (ct.includes("application/json")) {
         const data = await res.json();
         setUser(data.user);
+        try {
+          if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+          else localStorage.removeItem("user");
+        } catch (e) {
+          // ignore localStorage errors
+        }
       } else {
         // non-json (likely HTML error page) — treat as not logged in
         const txt = await res.text();
         console.error("Non-JSON response from /api/auth/me:", txt.slice(0, 400));
         setUser(null);
+        try { localStorage.removeItem("user"); } catch (e) {}
       }
     } catch (error) {
       console.error("Failed to fetch user:", error);
       setUser(null);
+      try { localStorage.removeItem("user"); } catch (e) {}
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // hydrate from localStorage for instant UI responsiveness
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        setUser(JSON.parse(stored));
+        setLoading(false);
+      }
+    } catch (e) {
+      // ignore parse/localStorage errors
+    }
+
     fetchUser();
   }, [fetchUser]);
 
@@ -44,6 +64,7 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
       setUser(data.user);
+      try { localStorage.setItem("user", JSON.stringify(data.user)); } catch (e) {}
       return data.user;
     }
     const txt = await res.text();
@@ -61,6 +82,7 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
       setUser(data.user);
+      try { localStorage.setItem("user", JSON.stringify(data.user)); } catch (e) {}
       return data.user;
     }
     const txt = await res.text();
@@ -70,6 +92,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
+    try { localStorage.removeItem("user"); } catch (e) {}
   };
 
   return (

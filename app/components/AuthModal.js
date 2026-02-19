@@ -10,22 +10,45 @@ export default function AuthModal({ isOpen, onClose }) {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   
   const { login, register } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    // If registering, require the user to accept the confirmation prompt
+    if (mode === "register") {
+      setShowConfirm(true);
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (mode === "login") {
         await login(username, password);
-      } else {
-        await register(username, password, displayName || username);
       }
       onClose();
       // Reset form
+      setUsername("");
+      setPassword("");
+      setDisplayName("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = async (accepted) => {
+    setShowConfirm(false);
+    if (!accepted) return;
+
+    setLoading(true);
+    try {
+      await register(username, password, displayName || username);
+      onClose();
       setUsername("");
       setPassword("");
       setDisplayName("");
@@ -93,6 +116,19 @@ export default function AuthModal({ isOpen, onClose }) {
           </button>
         </form>
 
+        {/* Themed confirmation dialog for registration */}
+        {showConfirm && (
+          <div className="confirm-overlay">
+            <div className="confirm-box">
+              <p className="confirm-question">Do you believe that Manan is cute?</p>
+              <div className="confirm-actions">
+                <button className="confirm-no" onClick={() => handleConfirm(false)}>No</button>
+                <button className="confirm-yes" onClick={() => handleConfirm(true)}>Yes</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <p className="auth-switch">
           {mode === "login" ? (
             <>
@@ -131,11 +167,12 @@ export default function AuthModal({ isOpen, onClose }) {
           background: rgba(20, 10, 40, 0.95);
           border: 1px solid rgba(140, 80, 220, 0.4);
           border-radius: 8px;
-          padding: 32px;
+          padding: 48px;
           width: 100%;
-          max-width: 360px;
+          max-width: 520px;
           position: relative;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(140, 80, 220, 0.1);
+          font-size: 20px; /* base text size for the modal */
         }
 
         .auth-modal-close {
@@ -159,11 +196,11 @@ export default function AuthModal({ isOpen, onClose }) {
         h2 {
           margin: 0 0 24px;
           color: #c084fc;
-          font-size: 20px;
+          font-size: 26px;
           text-align: center;
           font-family: 'Courier New', monospace;
           text-transform: uppercase;
-          letter-spacing: 3px;
+          letter-spacing: 2px;
         }
 
         .auth-input-group {
@@ -173,8 +210,8 @@ export default function AuthModal({ isOpen, onClose }) {
         label {
           display: block;
           color: #9b7cc8;
-          font-size: 11px;
-          margin-bottom: 6px;
+          font-size: 14px;
+          margin-bottom: 8px;
           font-family: 'Courier New', monospace;
           text-transform: uppercase;
           letter-spacing: 1px;
@@ -182,12 +219,12 @@ export default function AuthModal({ isOpen, onClose }) {
 
         input {
           width: 100%;
-          padding: 12px 14px;
+          padding: 14px 16px;
           background: rgba(140, 80, 220, 0.1);
           border: 1px solid rgba(140, 80, 220, 0.3);
           border-radius: 6px;
           color: #e9d5ff;
-          font-size: 14px;
+          font-size: 20px;
           font-family: 'Courier New', monospace;
           outline: none;
           transition: all 0.2s;
@@ -205,7 +242,7 @@ export default function AuthModal({ isOpen, onClose }) {
 
         .auth-error {
           color: #c44;
-          font-size: 12px;
+          font-size: 16px;
           margin: 0 0 16px;
           text-align: center;
           font-family: 'Courier New', monospace;
@@ -213,13 +250,13 @@ export default function AuthModal({ isOpen, onClose }) {
 
         .auth-submit {
           width: 100%;
-          padding: 14px;
+          padding: 16px;
           background: rgba(140, 80, 220, 0.2);
           border: 1px solid rgba(140, 80, 220, 0.5);
           border-radius: 6px;
           color: #c084fc;
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 20px;
+          font-weight: 700;
           font-family: 'Courier New', monospace;
           text-transform: uppercase;
           letter-spacing: 2px;
@@ -243,7 +280,7 @@ export default function AuthModal({ isOpen, onClose }) {
           margin-top: 20px;
           text-align: center;
           color: #6b5b95;
-          font-size: 12px;
+          font-size: 16px;
           font-family: 'Courier New', monospace;
         }
 
@@ -252,7 +289,7 @@ export default function AuthModal({ isOpen, onClose }) {
           border: none;
           color: #a855f7;
           cursor: pointer;
-          font-size: 12px;
+          font-size: 16px;
           font-family: 'Courier New', monospace;
           padding: 0;
           transition: color 0.2s;
@@ -262,6 +299,46 @@ export default function AuthModal({ isOpen, onClose }) {
           color: #c084fc;
           text-decoration: underline;
         }
+
+        /* Confirmation dialog styles */
+        .confirm-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(5,5,26,0.6);
+          z-index: 60;
+        }
+        .confirm-box {
+          width: 100%;
+          max-width: 420px;
+          background: rgba(20,10,40,0.98);
+          border: 1px solid rgba(140,80,220,0.4);
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+          text-align: center;
+        }
+        .confirm-question {
+          color: #c084fc;
+          font-family: 'Courier New', monospace;
+          font-size: 18px;
+          margin: 0 0 14px;
+        }
+        .confirm-actions { display: flex; gap: 12px; justify-content: center; }
+        .confirm-no, .confirm-yes {
+          padding: 10px 18px;
+          border-radius: 6px;
+          border: 1px solid rgba(140,80,220,0.3);
+          background: rgba(140,80,220,0.06);
+          color: #e9d5ff;
+          font-family: 'Courier New', monospace;
+          font-size: 16px;
+          cursor: pointer;
+        }
+        .confirm-no { background: rgba(60,40,70,0.6); color: #9b7cc8; }
+        .confirm-yes { background: rgba(100,60,170,0.85); color: #fff; border-color: rgba(168,85,247,0.7); }
       `}</style>
     </div>
   );

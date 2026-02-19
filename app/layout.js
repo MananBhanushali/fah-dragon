@@ -2,9 +2,9 @@ import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
 
 export const metadata = {
-  title: "Night Fury Radar — Fly Blind. Pulse to See.",
+  title: "Fah Dragon",
   description:
-    "An atmospheric side-scrolling survival game. You are Toothless, navigating pitch-black caves with plasma pulse sonar.",
+    "An atmospheric side-scrolling survival game. Pilot the Fah Dragon through pitch-black caves using plasma pulse sonar.",
 };
 
 export default function RootLayout({ children }) {
